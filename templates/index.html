@@ -1,0 +1,779 @@
+<!DOCTYPE html>
+<html lang="mr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>BTC Live Tracker & Probability</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body { background-color: #0d1117; color: #e6edf3; font-family: sans-serif; }
+        .card { background-color: #161b22; border: 1px solid #30363d; border-radius: 12px; }
+    </style>
+</head>
+<body class="p-4 max-w-md mx-auto">
+    
+    <div id="final-closing-banner" class="card p-3 mb-4 border border-amber-500 hidden text-center bg-[#1f242c] shadow-xl">
+        <span class="text-xs text-amber-400 font-bold block tracking-wider animate-pulse">🏆 LAST ROUND CLOSING RESULT</span>
+        <div class="flex justify-center items-center gap-6 mt-3 mb-3">
+            <div>
+                <span class="text-[10px] text-gray-400 block">SERVER FINAL</span>
+                <span id="final-live-price" class="text-white font-bold text-xl block">$-</span>
+            </div>
+            <div class="border-l border-[#30363d] h-8"></div>
+            <div>
+                <span class="text-[10px] text-gray-400 block">RESULT</span>
+                <span id="final-price-diff" class="font-bold text-xl text-gray-400 block">-</span>
+            </div>
+        </div>
+        
+        <div class="bg-[#0d1117] border border-yellow-600/50 rounded-lg p-3 mb-3 shadow-inner flex justify-center items-center gap-6">
+            <div class="text-center w-1/2">
+                <span class="text-[10px] text-gray-400 font-bold block tracking-widest mb-1">BINANCE 00s OPEN</span>
+                <span id="binance-00s-open" class="text-yellow-400 font-bold text-2xl block animate-pulse">⏳ Waiting...</span>
+            </div>
+            <div class="border-l border-[#30363d] h-10"></div>
+            <div class="text-center w-1/2">
+                <span class="text-[10px] text-gray-400 font-bold block tracking-widest mb-1">RESULT</span>
+                <span id="binance-00s-diff" class="text-gray-500 font-bold text-xl block">-</span>
+            </div>
+        </div>
+
+        <div class="bg-[#0d1117] border border-blue-600/50 rounded-lg p-3 mb-4 shadow-inner flex justify-center items-center gap-6">
+            <div class="text-center w-1/2">
+                <span class="text-[10px] text-blue-300 font-bold block tracking-widest mb-1">BINANCE API (INSTANT)</span>
+                <span id="api-00s-open" class="text-blue-400 font-bold text-2xl block">⏳ Fetching...</span>
+            </div>
+            <div class="border-l border-[#30363d] h-10"></div>
+            <div class="text-center w-1/2">
+                <span class="text-[10px] text-gray-400 font-bold block tracking-widest mb-1">API RESULT</span>
+                <span id="api-00s-diff" class="text-gray-500 font-bold text-xl block">-</span>
+            </div>
+        </div>
+
+        <button onclick="resetTracker()" class="w-full bg-gray-700 hover:bg-gray-600 text-white font-bold py-2.5 rounded-lg text-sm border border-gray-600 transition shadow">🔄 नवीन राऊंड सुरू करा (Reset)</button>
+    </div>
+
+    <div id="top-time-container" class="flex justify-between items-center mb-4 hidden">
+        <div id="clock" class="text-xl font-bold text-gray-400">00:00:00 PM</div>
+        <div class="text-center">
+            <span class="text-[10px] text-gray-400 font-bold block tracking-wider">PRICE TO BEAT</span>
+            <span id="top-price-beat" class="text-amber-400 font-bold text-lg">$0.00</span>
+        </div>
+        <div class="text-right">
+            <span class="text-xs text-gray-400 block">वेळ बाकी</span>
+            <span id="countdown" class="text-2xl font-bold text-white">0m 00s</span>
+        </div>
+    </div>
+
+    <div id="setup-card" class="card p-4 mb-4">
+        <label class="block text-sm text-gray-400 mb-1">Price to Beat (USD)</label>
+        <input id="price-beat-input" type="number" value="68250.50" class="w-full bg-[#21262d] text-amber-400 font-bold text-xl p-2 rounded mb-1 border border-[#30363d]">
+        <p class="text-xs text-gray-500 mb-4">पुढच्या ५ मिनिटांच्या interval पर्यंत track करेल</p>
+        <label class="block text-sm text-gray-400 mb-1">Closing Second (0-59)</label>
+        <div class="flex items-center gap-3 mb-4">
+            <input id="closing-sec-input" type="number" value="59" min="0" max="59" class="w-20 bg-[#21262d] text-white text-center font-bold p-2 rounded border border-[#30363d]">
+            <span class="text-xs text-gray-400">या second ची tick price final closing म्हणून दिसेल</span>
+        </div>
+        <div class="flex justify-between items-center mb-6">
+            <div>
+                <span class="text-sm font-bold block">वेळ बाकी +1 sec</span>
+                <span class="text-xs text-gray-500">display मध्ये 1 second जास्त दाखवेल</span>
+            </div>
+            <input id="plus-one-toggle" type="checkbox" class="w-10 h-5 bg-gray-700 checked:bg-blue-600 rounded-full cursor-pointer">
+        </div>
+        <button id="start-btn" onclick="startTracking()" class="w-full bg-amber-500 hover:bg-amber-600 text-black font-bold py-3 rounded-xl text-lg transition shadow-lg">Track सुरू करा</button>
+    </div>
+
+    <div id="dashboard-card" class="card p-4 mb-4 hidden">
+        
+        <div class="grid grid-cols-2 gap-3 mb-4">
+            <div class="p-3 bg-[#21262d] rounded-xl flex flex-col justify-between shadow-inner border border-[#30363d]">
+                <div>
+                    <span class="text-[10px] text-gray-400 font-bold block tracking-wider">SERVER LIVE PRICE</span>
+                    <span id="dash-live-price" class="text-blue-400 font-bold text-lg block mt-1">$0.00</span>
+                </div>
+                <div class="mt-3 pt-2 border-t border-[#30363d]">
+                    <span class="text-[10px] text-gray-500 font-bold block tracking-widest mb-1">SERVER DIFFERENCE</span>
+                    <span id="price-diff" class="text-3xl block text-gray-400 font-bold">0.00</span>
+                </div>
+            </div>
+
+            <div class="p-3 bg-[#21262d] rounded-xl flex flex-col justify-between shadow-inner border border-yellow-600/50">
+                <div>
+                    <span class="text-[10px] text-gray-400 font-bold block tracking-wider">BINANCE LIVE PRICE</span>
+                    <span id="dash-binance-live-price" class="text-yellow-400 font-bold text-lg block mt-1">$0.00</span>
+                </div>
+                <div class="mt-3 pt-2 border-t border-[#30363d]">
+                    <span class="text-[10px] text-gray-500 font-bold block tracking-widest mb-1">BINANCE DIFFERENCE</span>
+                    <span id="binance-price-diff" class="text-3xl block text-gray-400 font-bold">0.00</span>
+                </div>
+            </div>
+        </div>
+        
+        <div class="mb-4">
+            <span class="text-xs font-bold text-amber-500">• BTC/USDT - Live Price Chart</span>
+            <canvas id="liveChart" class="w-full h-48 mt-2"></canvas>
+        </div>
+        
+        <div class="border-t border-[#30363d] pt-4 mb-4">
+            <span class="text-sm font-bold block mb-2">⚓ Live Price Tick Sound (Binance > 0.01 move)</span>
+            <div class="grid grid-cols-2 gap-2">
+                <button id="up-sound-btn" onclick="toggleSound('up')" class="bg-gray-800 text-sm py-2 rounded font-bold text-emerald-400 border border-gray-700">🟢 UP Sound: OFF</button>
+                <button id="down-sound-btn" onclick="toggleSound('down')" class="bg-gray-800 text-sm py-2 rounded font-bold text-rose-400 border border-gray-700">🔴 DOWN Sound: OFF</button>
+            </div>
+        </div>
+        
+        <div class="border-t border-[#30363d] pt-4">
+            <span class="text-sm font-bold block mb-2">🔔 Binance Difference Beep Alert</span>
+            <div class="flex items-center gap-4 mb-2">
+                <span class="text-xs text-gray-400">Threshold ($)</span>
+                <input id="threshold-input" type="number" value="50" oninput="updateThresholdDisplay()" class="w-20 bg-[#21262d] text-center rounded p-1 text-sm border border-[#30363d]">
+                <span id="threshold-1-5x-display" class="text-xs text-amber-400 font-bold ml-2 tracking-wider bg-gray-800 px-2 py-1 rounded">1.5x: 75</span>
+            </div>
+            <div class="grid grid-cols-2 gap-2">
+                <button id="beep-up-btn" onclick="toggleBeep('up')" class="bg-gray-800 text-xs py-2 rounded font-bold text-emerald-400 border border-gray-700">🟢 +50 वर Beep OFF</button>
+                <button id="beep-down-btn" onclick="toggleBeep('down')" class="bg-gray-800 text-xs py-2 rounded font-bold text-rose-400 border border-gray-700">🔴 -50 वर Beep OFF</button>
+            </div>
+        </div>
+
+        <div class="border-t border-[#30363d] mt-4 pt-4 mb-2">
+            <div class="p-2 bg-[#21262d] rounded-lg flex justify-between items-center mb-2">
+                <span class="text-xs text-gray-400 font-bold">1 Min ATR (Binance Data)</span>
+                <span id="dash-atr" class="text-amber-400 font-bold text-md">0.00</span>
+            </div>
+            <div class="p-2 bg-[#1f2937] border border-blue-900 rounded-lg flex justify-between items-center shadow-inner">
+                <span class="text-xs text-blue-300 font-bold">✍️ Manual 1-Min ATR Input</span>
+                <input id="manual-atr-input" type="number" value="50" class="w-20 bg-[#0d1117] text-white text-center font-bold p-1 rounded border border-[#30363d]">
+            </div>
+        </div>
+
+        <div class="border border-[#30363d] rounded-lg bg-[#0d1117] p-3 mt-3 text-center shadow-inner">
+            <span class="text-[10px] text-gray-500 font-bold block tracking-widest mb-1">⚡ PROBABILITY</span>
+            <span id="prediction-value" class="text-3xl font-extrabold text-gray-300 transition-colors duration-200">5.0</span>
+        </div>
+
+        <div class="border-t border-[#30363d] pt-4 mt-4">
+            <span class="text-sm font-bold block mb-2">🔄 0.00 Crossover Sound (Binance Price)</span>
+            <button id="cross-sound-btn" onclick="toggleCrossSound()" class="w-full bg-gray-800 text-sm py-2 rounded font-bold text-indigo-400 border border-gray-700">🔔 Crossover Sound: ON</button>
+        </div>
+
+        <div class="border-t border-[#30363d] pt-4 mt-4">
+            <span class="text-sm font-bold block mb-2 text-blue-300">⏱️ Ticks Range: -500ms to +500ms (Binance - 100ms)</span>
+            <div id="tick-data-container" class="bg-[#161b22] p-3 rounded-lg border border-[#30363d] font-mono text-xs shadow-inner">
+                <div class="text-center text-gray-500 py-2">Tracking सुरू झाल्यावर इथे दिसेल...</div>
+            </div>
+        </div>
+
+    </div>
+
+    <script>
+        let currentBinancePrice = 0;
+        let chart;
+        let priceBeat = 0;
+        let closingSec = 59;
+        let plusOneSec = false;
+        let isRoundActive = false; 
+        
+        let soundConfig = { up: false, down: false, beepUp: false, beepDown: false, cross: true };
+        
+        let lastTargetTimestamp = null;
+        let lastLivePrice = 0;
+        let lastFinalPrice = null; 
+        
+        let beepUpTriggered = false;
+        let beepDownTriggered = false;
+        let beepUp1_5xTriggered = false;
+        let beepDown1_5xTriggered = false;
+        
+        let currentZone = null; 
+        let upTickAnchor = null;
+        let downTickAnchor = null;
+        let localTickTargetTime = null;
+        let tickDataArray = [];
+        let tickInterval = null;
+
+        let globalAudioCtx = null;
+
+        function initAudioContext() {
+            if (!globalAudioCtx) {
+                globalAudioCtx = new (window.AudioContext || window.webkitAudioContext)();
+            }
+            if (globalAudioCtx && globalAudioCtx.state === 'suspended') {
+                globalAudioCtx.resume();
+            }
+        }
+
+        function updateThresholdDisplay() {
+            let val = parseFloat(document.getElementById('threshold-input').value) || 0;
+            document.getElementById('threshold-1-5x-display').innerText = `1.5x: ${val * 1.5}`;
+        }
+
+        function initBinanceLive() {
+            const dashEl = document.getElementById('dash-binance-live-price');
+            const diffEl = document.getElementById('binance-price-diff');
+
+            function connect() {
+                const bws = new WebSocket('wss://stream.binance.com:9443/ws/btcusdt@trade');
+                bws.onmessage = (event) => {
+                    try {
+                        const d = JSON.parse(event.data);
+                        currentBinancePrice = parseFloat(d.p);
+                        const txt = "$" + currentBinancePrice.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+                        
+                        if (dashEl) dashEl.innerText = txt;
+
+                        if (isRoundActive && priceBeat > 0) {
+                            let binanceDiff = currentBinancePrice - priceBeat;
+
+                            if (diffEl) {
+                                if(binanceDiff >= 0) {
+                                    diffEl.innerText = '+' + binanceDiff.toFixed(2) + ' वर';
+                                    diffEl.className = "text-3xl block text-emerald-400 font-bold";
+                                } else {
+                                    diffEl.innerText = binanceDiff.toFixed(2) + ' खाली';
+                                    diffEl.className = "text-3xl block text-rose-400 font-bold";
+                                }
+                            }
+
+                            let newZone = binanceDiff >= 0 ? 'up' : 'down';
+                            if (soundConfig.cross && currentZone !== null && currentZone !== newZone) {
+                                if (newZone === 'up') triggerAudio('cross_up');
+                                else triggerAudio('cross_down');
+                            }
+                            currentZone = newZone;
+
+                            if (soundConfig.up && upTickAnchor !== null) {
+                                let upDifference = parseFloat((currentBinancePrice - upTickAnchor).toFixed(2));
+                                if (upDifference > 0.01) {
+                                    triggerAudio('up');
+                                    upTickAnchor = currentBinancePrice; 
+                                }
+                            }
+                            if (soundConfig.down && downTickAnchor !== null) {
+                                let downDifference = parseFloat((downTickAnchor - currentBinancePrice).toFixed(2));
+                                if (downDifference > 0.01) {
+                                    triggerAudio('down');
+                                    downTickAnchor = currentBinancePrice; 
+                                }
+                            }
+                            
+                            let threshold = parseFloat(document.getElementById('threshold-input').value) || 50;
+                            let threshold1_5x = threshold * 1.5;
+
+                            if (soundConfig.beepUp) {
+                                if (binanceDiff >= threshold1_5x) {
+                                    if (!beepUp1_5xTriggered) { triggerAudio('beep_special'); beepUp1_5xTriggered = true; beepUpTriggered = true; }
+                                } else if (binanceDiff >= threshold) {
+                                    beepUp1_5xTriggered = false; 
+                                    if (!beepUpTriggered) { triggerAudio('beep'); beepUpTriggered = true; }
+                                } else { beepUpTriggered = false; beepUp1_5xTriggered = false; }
+                            }
+
+                            if (soundConfig.beepDown) {
+                                if (binanceDiff <= -threshold1_5x) {
+                                    if (!beepDown1_5xTriggered) { triggerAudio('beep_special'); beepDown1_5xTriggered = true; beepDownTriggered = true; }
+                                } else if (binanceDiff <= -threshold) {
+                                    beepDown1_5xTriggered = false;
+                                    if (!beepDownTriggered) { triggerAudio('beep'); beepDownTriggered = true; }
+                                } else { beepDownTriggered = false; beepDown1_5xTriggered = false; }
+                            }
+                        }
+                    } catch (e) {}
+                };
+                bws.onclose = () => setTimeout(connect, 2000); 
+                bws.onerror = () => bws.close();
+            }
+            connect();
+        }
+        initBinanceLive();
+
+        // Old BINANCE 1s KLINE (WebSocket - Unchanged)
+        function initBinanceKline() {
+            function connectKline() {
+                const kws = new WebSocket('wss://stream.binance.com:9443/ws/btcusdt@kline_1s');
+                kws.onmessage = (event) => {
+                    try {
+                        const data = JSON.parse(event.data);
+                        if (data.e === 'kline') {
+                            const k = data.k;
+                            const candleTime = new Date(k.t);
+                            
+                            if (candleTime.getMinutes() % 5 === 0 && candleTime.getSeconds() === 0) {
+                                let openPrice = parseFloat(k.o);
+                                const openEl = document.getElementById('binance-00s-open');
+                                const diffEl = document.getElementById('binance-00s-diff');
+                                
+                                if (openEl) {
+                                    openEl.innerText = `$${openPrice.toFixed(2)}`;
+                                    openEl.classList.remove('animate-pulse', 'text-gray-500', 'text-yellow-600');
+                                    openEl.classList.add('text-yellow-400');
+                                }
+
+                                if (diffEl && priceBeat > 0) {
+                                    let resultDiff = openPrice - priceBeat;
+                                    if (resultDiff >= 0) {
+                                        diffEl.innerText = '+' + resultDiff.toFixed(2) + ' वर';
+                                        diffEl.className = "font-bold text-xl block text-emerald-400";
+                                    } else {
+                                        diffEl.innerText = resultDiff.toFixed(2) + ' खाली';
+                                        diffEl.className = "font-bold text-xl block text-rose-400";
+                                    }
+                                }
+                            }
+                        }
+                    } catch (e) {}
+                };
+                kws.onclose = () => setTimeout(connectKline, 2000);
+                kws.onerror = () => kws.close();
+            }
+            connectKline();
+        }
+        initBinanceKline();
+
+        // NEW: Binance REST API Fetching (Instant - Timeout Removed)
+        function fetchBinanceApiOpen(targetMs, targetPriceBeat) {
+            const apiOpenEl = document.getElementById('api-00s-open');
+            const apiDiffEl = document.getElementById('api-00s-diff');
+            
+            apiOpenEl.innerText = '⏳ Fetching...';
+            apiOpenEl.className = 'text-blue-400 font-bold text-2xl block animate-pulse';
+            apiDiffEl.innerText = '-';
+            apiDiffEl.className = 'text-gray-500 font-bold text-xl block';
+
+            // Sent instantly upon round close
+            fetch(`https://api.binance.com/api/v3/klines?symbol=BTCUSDT&interval=1s&startTime=${targetMs}&limit=1`)
+            .then(res => res.json())
+            .then(data => {
+                if(data && data.length > 0) {
+                    let openPrice = parseFloat(data[0][1]);
+                    apiOpenEl.innerText = `$${openPrice.toFixed(2)}`;
+                    apiOpenEl.classList.remove('animate-pulse');
+                    
+                    if (targetPriceBeat > 0) {
+                        let diff = openPrice - targetPriceBeat;
+                        if (diff >= 0) {
+                            apiDiffEl.innerText = '+' + diff.toFixed(2) + ' वर';
+                            apiDiffEl.className = "font-bold text-xl block text-emerald-400";
+                        } else {
+                            apiDiffEl.innerText = diff.toFixed(2) + ' खाली';
+                            apiDiffEl.className = "font-bold text-xl block text-rose-400";
+                        }
+                    }
+                } else {
+                    apiOpenEl.innerText = '⚠️ No Data';
+                    apiOpenEl.classList.remove('animate-pulse');
+                }
+            })
+            .catch(err => {
+                apiOpenEl.innerText = '⚠️ Error';
+                apiOpenEl.classList.remove('animate-pulse');
+            });
+        }
+
+        function renderTickData() {
+            let container = document.getElementById('tick-data-container');
+            if (!container) return;
+            
+            let html = '<div class="grid grid-cols-2 gap-x-6 gap-y-2">';
+            for (let i = 0; i < tickDataArray.length; i++) {
+                let item = tickDataArray[i];
+                let priceStr = item.price ? `$${item.price.toFixed(2)}` : '---';
+                let colorClass = item.price ? 'text-amber-400 font-bold' : 'text-gray-600';
+                
+                html += `<div class="flex justify-between items-center border-b border-gray-800 pb-1">
+                            <span class="text-gray-400">${item.label}</span>
+                            <span class="${colorClass}">${priceStr}</span>
+                         </div>`;
+            }
+            html += '</div>';
+            container.innerHTML = html;
+        }
+
+        function captureTicks() {
+            if (!localTickTargetTime) return;
+            let msLeft = localTickTargetTime - Date.now();
+            
+            for (let i = 0; i <= 10; i++) {
+                let targetMsForBucket = 500 - (i * 100); 
+                if (msLeft <= targetMsForBucket && tickDataArray[i] && tickDataArray[i].price === null) {
+                    if (currentBinancePrice > 0) {
+                        tickDataArray[i].price = currentBinancePrice; 
+                        renderTickData();
+                    }
+                }
+            }
+        }
+
+        function triggerAudio(type) {
+            try {
+                initAudioContext();
+                if (!globalAudioCtx) return;
+
+                let osc = globalAudioCtx.createOscillator();
+                let gain = globalAudioCtx.createGain();
+                osc.connect(gain);
+                gain.connect(globalAudioCtx.destination);
+                gain.gain.setValueAtTime(0.08, globalAudioCtx.currentTime); 
+                
+                if (type === 'up') {
+                    osc.frequency.setValueAtTime(800, globalAudioCtx.currentTime);
+                    osc.start(); osc.stop(globalAudioCtx.currentTime + 0.08); 
+                } else if (type === 'down') {
+                    osc.frequency.setValueAtTime(400, globalAudioCtx.currentTime);
+                    osc.start(); osc.stop(globalAudioCtx.currentTime + 0.08);
+                } else if (type === 'beep') {
+                    osc.frequency.setValueAtTime(1000, globalAudioCtx.currentTime);
+                    osc.start(); osc.stop(globalAudioCtx.currentTime + 0.4); 
+                } else if (type === 'cross_up') {
+                    osc.type = 'sine';
+                    osc.frequency.setValueAtTime(500, globalAudioCtx.currentTime);
+                    osc.frequency.exponentialRampToValueAtTime(1200, globalAudioCtx.currentTime + 0.12);
+                    osc.start(); osc.stop(globalAudioCtx.currentTime + 0.12);
+                } else if (type === 'cross_down') {
+                    osc.type = 'sine';
+                    osc.frequency.setValueAtTime(1200, globalAudioCtx.currentTime);
+                    osc.frequency.exponentialRampToValueAtTime(500, globalAudioCtx.currentTime + 0.12);
+                    osc.start(); osc.stop(globalAudioCtx.currentTime + 0.12);
+                } else if (type === 'beep_special') {
+                    osc.type = 'sawtooth';
+                    osc.frequency.setValueAtTime(800, globalAudioCtx.currentTime);
+                    osc.frequency.exponentialRampToValueAtTime(2000, globalAudioCtx.currentTime + 0.3);
+                    osc.start(); osc.stop(globalAudioCtx.currentTime + 0.3);
+                }
+            } catch (e) {}
+        }
+
+        function normCDF(x) {
+            let sign = x < 0 ? -1 : 1;
+            x = Math.abs(x) / Math.sqrt(2.0);
+            let t = 1.0 / (1.0 + 0.3275911 * x);
+            let erf = 1.0 - (((((1.061405429 * t - 1.453152027) * t) + 1.421413741) * t - 0.284496736) * t + 0.254829592) * t * Math.exp(-x * x);
+            return 0.5 * (1.0 + sign * erf);
+        }
+
+        const priceBeatPlugin = {
+            id: 'priceBeatLine',
+            beforeDraw: (chart) => {
+                if (priceBeat > 0 && chart.scales.y) {
+                    const ctx = chart.ctx;
+                    const yAxis = chart.scales.y;
+                    const xAxis = chart.scales.x;
+                    let y = yAxis.getPixelForValue(priceBeat);
+                    if (y < yAxis.top) y = yAxis.top; 
+                    else if (y > yAxis.bottom) y = yAxis.bottom; 
+                    ctx.save();
+                    ctx.beginPath();
+                    ctx.setLineDash([5, 5]); 
+                    ctx.moveTo(xAxis.left, y);
+                    ctx.lineTo(xAxis.right, y);
+                    ctx.lineWidth = 1.5;
+                    ctx.strokeStyle = '#8b949e'; 
+                    ctx.stroke();
+                    ctx.restore();
+                }
+            }
+        };
+
+        const verticalLinePlugin = {
+            id: 'verticalLine',
+            beforeDraw: (chart) => {
+                const ctx = chart.ctx;
+                const yAxis = chart.scales.y;
+                const xAxis = chart.scales.x;
+                
+                chart.data.labels.forEach((label, index) => {
+                    if(!label) return;
+                    let parts = label.split(':');
+                    if (parts.length >= 3) {
+                        let m = parseInt(parts[1]);
+                        if (m % 5 === 4) {
+                            let isTransition = false;
+                            if (index === 0) {
+                                let s = parseInt(parts[2]);
+                                isTransition = (s === 0 || s === 1); 
+                            } else {
+                                let prevLabel = chart.data.labels[index - 1];
+                                if(prevLabel) {
+                                    let prevParts = prevLabel.split(':');
+                                    if (prevParts.length >= 3) {
+                                        let prevM = parseInt(prevParts[1]);
+                                        if (prevM !== m) isTransition = true;
+                                    }
+                                }
+                            }
+                            if (isTransition) {
+                                let x = xAxis.getPixelForValue(index);
+                                ctx.save();
+                                ctx.beginPath();
+                                ctx.setLineDash([3, 3]); 
+                                ctx.moveTo(x, yAxis.top);
+                                ctx.lineTo(x, yAxis.bottom);
+                                ctx.lineWidth = 1.5;
+                                ctx.strokeStyle = '#f87171';
+                                ctx.stroke();
+                                ctx.fillStyle = '#f87171';
+                                ctx.font = 'bold 9px sans-serif';
+                                ctx.textAlign = 'center';
+                                ctx.fillText('1 MIN', x, yAxis.top + 10);
+                                ctx.restore();
+                            }
+                        }
+                    }
+                });
+            }
+        };
+
+        const ctxChart = document.getElementById('liveChart').getContext('2d');
+        chart = new Chart(ctxChart, {
+            type: 'line',
+            data: { labels: [], datasets: [{ data: [], borderColor: '#10b981', borderWidth: 2, pointRadius: 0, fill: false }] },
+            options: { responsive: true, animation: false, scales: { x: { display: false }, y: { grid: { color: '#21262d' } } }, plugins: { legend: { display: false } } },
+            plugins: [priceBeatPlugin, verticalLinePlugin]
+        });
+
+        const ws = new WebSocket(`ws://${window.location.host}/ws`);
+        ws.onmessage = function(event) {
+            const data = JSON.parse(event.data);
+            const livePrice = data.live_price;
+            let now = new Date();
+            
+            if (data.server_time) {
+                let timeParts = data.server_time.split(':');
+                if (timeParts.length >= 3) {
+                    now.setHours(parseInt(timeParts[0]), parseInt(timeParts[1]), parseInt(timeParts[2]), 0);
+                }
+            }
+            document.getElementById('clock').innerText = now.toLocaleTimeString();
+            
+            let targetTime = new Date(now.getTime());
+            targetTime.setSeconds(closingSec);
+            targetTime.setMilliseconds(0);
+            
+            while (true) {
+                let m = targetTime.getMinutes();
+                let isValidMin = (closingSec === 59) ? (m % 5 === 4) : (m % 5 === 0);
+                if (isValidMin && targetTime >= now) break;
+                targetTime.setTime(targetTime.getTime() + 60000);
+            }
+
+            let diffMs = targetTime.getTime() - now.getTime();
+            
+            let calculatedLocalTarget = Date.now() + diffMs;
+            if (localTickTargetTime === null || Math.abs(calculatedLocalTarget - localTickTargetTime) < 5000) {
+                localTickTargetTime = calculatedLocalTarget;
+            } else {
+                if (Date.now() > localTickTargetTime + 600) {
+                    localTickTargetTime = calculatedLocalTarget;
+                }
+            }
+            
+            if (lastTargetTimestamp !== null && targetTime.getTime() > lastTargetTimestamp) {
+                isRoundActive = false; 
+                let finalPrice = lastLivePrice;
+                lastFinalPrice = finalPrice; 
+                
+                let finalDiff = finalPrice - priceBeat;
+                document.getElementById('final-live-price').innerText = `$${finalPrice.toFixed(2)}`;
+                let finalDiffLabel = document.getElementById('final-price-diff');
+                if (finalDiff >= 0) {
+                    finalDiffLabel.innerText = '+' + finalDiff.toFixed(2) + ' वर';
+                    finalDiffLabel.className = "font-bold text-xl block text-emerald-400";
+                } else {
+                    finalDiffLabel.innerText = finalDiff.toFixed(2) + ' खाली';
+                    finalDiffLabel.className = "font-bold text-xl block text-rose-400";
+                }
+                
+                // Show banner but indicate waiting for the exact 00s candle (WebSocket)
+                document.getElementById('binance-00s-open').innerText = '⏳ Waiting...';
+                document.getElementById('binance-00s-open').className = 'text-yellow-600 font-bold text-xl block animate-pulse';
+                document.getElementById('binance-00s-diff').innerText = '-';
+                document.getElementById('binance-00s-diff').className = 'text-gray-500 font-bold text-xl block';
+                
+                document.getElementById('final-closing-banner').classList.remove('hidden');
+                
+                document.getElementById('prediction-value').innerText = "-.-";
+                document.getElementById('prediction-value').className = "text-3xl font-extrabold text-gray-500 tracking-tight";
+
+                // --- INSTANT API FETCH TRIGGER ---
+                let target00sMs = lastTargetTimestamp;
+                if (closingSec === 59) {
+                    target00sMs += 1000; 
+                }
+                fetchBinanceApiOpen(target00sMs, priceBeat);
+            }
+            
+            lastTargetTimestamp = targetTime.getTime();
+            lastLivePrice = livePrice;
+            
+            if (plusOneSec) diffMs += 1000;
+            
+            if (diffMs > 0) {
+                let m = Math.floor(diffMs / 60000);
+                let s = Math.floor((diffMs % 60000) / 1000);
+                document.getElementById('countdown').innerText = `${m}m ${s}s`;
+            } else {
+                document.getElementById('countdown').innerText = `0m 00s`;
+            }
+            
+            document.getElementById('dash-live-price').innerText = `$${livePrice.toFixed(2)}`;
+            document.getElementById('dash-atr').innerText = data.atr_1m.toFixed(2);
+            
+            let diff = livePrice - priceBeat;
+            let diffLabel = document.getElementById('price-diff');
+
+            if(diff >= 0) {
+                diffLabel.innerText = '+' + diff.toFixed(2) + ' वर';
+                diffLabel.className = "text-3xl block text-emerald-400 font-bold";
+                chart.data.datasets[0].borderColor = '#10b981'; 
+            } else {
+                diffLabel.innerText = diff.toFixed(2) + ' खाली';
+                diffLabel.className = "text-3xl block text-rose-400 font-bold";
+                chart.data.datasets[0].borderColor = '#ef4444'; 
+            }
+
+            if (isRoundActive && priceBeat > 0 && diffMs > 0) {
+                let manualAtr = parseFloat(document.getElementById('manual-atr-input').value) || 50;
+                let vol1m = manualAtr / livePrice;
+                let vol5m = vol1m * 5; 
+                let tSec = diffMs / 1000;
+                let tFraction = Math.max(tSec, 1) / 300; 
+                let activeVol = vol5m * Math.sqrt(tFraction); 
+                
+                let zScore = Math.log(livePrice / priceBeat) / activeVol;
+                let probability = normCDF(zScore);
+                
+                let predValue = Math.round(probability * 100) / 10;
+                predValue = Math.max(0.1, Math.min(9.9, predValue)); 
+                
+                let predEl = document.getElementById('prediction-value');
+                predEl.innerText = predValue.toFixed(1);
+                
+                if(predValue >= 5.5) predEl.className = "text-3xl font-extrabold text-emerald-400 tracking-tight drop-shadow-md";
+                else if(predValue <= 4.5) predEl.className = "text-3xl font-extrabold text-rose-400 tracking-tight drop-shadow-md";
+                else predEl.className = "text-3xl font-extrabold text-gray-300 tracking-tight drop-shadow-md";
+            }
+
+            if(chart.data.labels.length > 30) {
+                chart.data.labels.shift();
+                chart.data.datasets[0].data.shift();
+            }
+            chart.data.labels.push(data.server_time);
+            chart.data.datasets[0].data.push(livePrice);
+
+            let dataArr = chart.data.datasets[0].data;
+            if(dataArr.length > 0) {
+                let maxData = Math.max(...dataArr);
+                let minData = Math.min(...dataArr);
+                let range = maxData - minData;
+                if (range < 2) range = 2; 
+                chart.options.scales.y.min = minData - (range * 0.1);
+                chart.options.scales.y.max = maxData + (range * 0.1);
+            }
+            
+            chart.update('none');
+        };
+
+        function startTracking() {
+            initAudioContext(); 
+            priceBeat = parseFloat(document.getElementById('price-beat-input').value);
+            closingSec = parseInt(document.getElementById('closing-sec-input').value);
+            plusOneSec = document.getElementById('plus-one-toggle').checked;
+            
+            isRoundActive = true; 
+            beepUpTriggered = false;
+            beepDownTriggered = false;
+            beepUp1_5xTriggered = false;
+            beepDown1_5xTriggered = false;
+            lastTargetTimestamp = null; 
+            currentZone = null;
+
+            soundConfig.up = false; soundConfig.down = false; soundConfig.beepUp = false; soundConfig.beepDown = false; soundConfig.cross = true;
+
+            upTickAnchor = null; downTickAnchor = null;
+
+            document.getElementById('up-sound-btn').innerText = '🟢 UP Sound: OFF';
+            document.getElementById('down-sound-btn').innerText = '🔴 DOWN Sound: OFF';
+            let thresholdVal = document.getElementById('threshold-input').value || 50;
+            document.getElementById('beep-up-btn').innerText = '🟢 +' + thresholdVal + ' वर Beep OFF';
+            document.getElementById('beep-down-btn').innerText = '🔴 -' + thresholdVal + ' वर Beep OFF';
+            document.getElementById('cross-sound-btn').innerText = '🔔 Crossover Sound: ON';
+            
+            document.getElementById('top-price-beat').innerText = `$${priceBeat.toFixed(2)}`;
+
+            document.getElementById('setup-card').classList.add('hidden');
+            document.getElementById('top-time-container').classList.remove('hidden');
+            document.getElementById('dashboard-card').classList.remove('hidden');
+            document.getElementById('final-closing-banner').classList.add('hidden');
+
+            localTickTargetTime = null; 
+            let prevSec = (closingSec === 0) ? 59 : closingSec - 1;
+            let pStr = prevSec.toString().padStart(2, '0');
+            let cStr = closingSec.toString().padStart(2, '0');
+            
+            tickDataArray = [];
+            for (let i = 5; i <= 9; i++) tickDataArray.push({ label: `${pStr}s ${i*100}ms`, price: null });
+            for (let i = 0; i <= 5; i++) tickDataArray.push({ label: `${cStr}s ${i*100}ms`, price: null });
+            
+            renderTickData();
+
+            if (tickInterval) clearInterval(tickInterval);
+            tickInterval = setInterval(captureTicks, 20);
+        }
+
+        function resetTracker() {
+            document.getElementById('dashboard-card').classList.add('hidden');
+            document.getElementById('top-time-container').classList.add('hidden');
+            document.getElementById('final-closing-banner').classList.add('hidden');
+            document.getElementById('setup-card').classList.remove('hidden');
+            
+            document.getElementById('binance-00s-open').innerText = '⏳ Waiting...';
+            document.getElementById('binance-00s-open').className = 'text-yellow-400 font-bold text-xl block animate-pulse';
+            document.getElementById('binance-00s-diff').innerText = '-';
+            document.getElementById('binance-00s-diff').className = 'text-gray-500 font-bold text-xl block';
+            
+            // Reset API Box
+            document.getElementById('api-00s-open').innerText = '⏳ Fetching...';
+            document.getElementById('api-00s-open').className = 'text-blue-400 font-bold text-2xl block';
+            document.getElementById('api-00s-diff').innerText = '-';
+            document.getElementById('api-00s-diff').className = 'text-gray-500 font-bold text-xl block';
+
+            if (lastFinalPrice !== null) document.getElementById('price-beat-input').value = lastFinalPrice.toFixed(2);
+            chart.data.labels = []; chart.data.datasets[0].data = []; chart.update('none');
+            
+            document.getElementById('final-live-price').innerText = '$-';
+            document.getElementById('final-price-diff').innerText = '-';
+            priceBeat = 0; 
+
+            if (tickInterval) clearInterval(tickInterval);
+            document.getElementById('tick-data-container').innerHTML = '<div class="text-center text-gray-500 py-2">Tracking सुरू झाल्यावर इथे दिसेल...</div>';
+        }
+
+        function toggleCrossSound() {
+            initAudioContext();
+            soundConfig.cross = !soundConfig.cross;
+            document.getElementById('cross-sound-btn').innerText = `🔔 Crossover Sound: ${soundConfig.cross ? 'ON' : 'OFF'}`;
+        }
+
+        function toggleSound(mode) {
+            initAudioContext();
+            soundConfig[mode] = !soundConfig[mode];
+            if (mode === 'up') {
+                upTickAnchor = soundConfig.up ? currentBinancePrice : null;
+                document.getElementById('up-sound-btn').innerText = `🟢 UP Sound: ${soundConfig.up ? 'ON' : 'OFF'}`;
+            } else if (mode === 'down') {
+                downTickAnchor = soundConfig.down ? currentBinancePrice : null;
+                document.getElementById('down-sound-btn').innerText = `🔴 DOWN Sound: ${soundConfig.down ? 'ON' : 'OFF'}`;
+            }
+        }
+
+        function toggleBeep(mode) {
+            initAudioContext();
+            let key = mode === 'up' ? 'beepUp' : 'beepDown';
+            soundConfig[key] = !soundConfig[key];
+            let thresholdVal = document.getElementById('threshold-input').value || 50;
+            document.getElementById(`beep-${mode}-btn`).innerText = `${mode === 'up' ? '🟢 +'+thresholdVal+' वर' : '🔴 -'+thresholdVal+' वर'} Beep ${soundConfig[key] ? 'ON' : 'OFF'}`;
+        }
+    </script>
+</body>
+              </html>
